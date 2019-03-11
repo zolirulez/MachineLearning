@@ -23,52 +23,49 @@ B = repmat(B0 + N/K, [1, K]); % 1xK
 a = repmat(a0 + N/K, [1, K]); % 1xK
 v = repmat(v0 + N/K, [1, K]); % 1xK
 for k = 1:K
-  % Let m_k be a random data point:
-  m{k} = data(randi(N), :); % 1xD
-  % Let W_k be the mean of the Wishart prior:
-  W{k} = v0*W0; % DxD
+    % Let m_k be a random data point:
+    m{k} = data(randi(N), :); % 1xD
+    % Let W_k be the mean of the Wishart prior:
+    W{k} = v0*W0; % DxD % I MODIFIED HERE TODO
 end % for
 Nk = ones(1, K) / K; % 1xK
 
 %% Loop until you're happy
 max_iter = 100;
+xb = cell(K,1);
+S = cell(K,1);
+lnrho = zeros(N,K);
+r = zeros(N,K);
 for iter = 1:max_iter
     %% Variational E-step
     % XXX: FILL ME IN!
+    Elnpb = digamma(a) - digamma(sum(a));
     for k = 1:K
-        for n = 1:N
-            ECV = D/B(k) + v(k)*((data(n,:) - m0)*W{k}*(data(n,:) - m0)');
-            lnLt = sum(digamma(v(k)+1-(1:D))) + D*log(2) + logdet(W{k});
-        end
+        ElnLt = sum(digamma((v(k)+1-(1:D))/2)) + D*log(2) + logdet(W{k});
+        EmL = D/B(k) + v(k)*sum(((data - m{k})*W{k}).*(data - m{k}),2);
+        lnrho(:,k) = Elnpb(k) + ElnLt/2 - D/2*log(2*pi) - 1/2*EmL;
     end
-    lnpb = digamma(a(k)) - digamma(sum(a));
-    for k = 1:K
-        for n = 1:N
-            lnrho(n,k) = lnpb + lnLt/2 - D/2*log(2*pi) - 1/2*ECV;
-        end
-    end
-    for k = 1:K
-        C = exp(-max(lnrho(:,k)));
-        r(:,k) = exp(lnrho(:,k)+log(C));
-        r = r./sum(r,2);
-    end
+    lnC = -max(lnrho,[],2);
+    r = exp(lnrho-lnC);
+    r = r./sum(r,2);
     Nk = sum(r,1);
-
-  %% Variational M-step
-  % XXX: FILL ME IN!
-%   xb = ((1./Nk)*sum(r,1)')*data;
-%   S = ((1./Nk)*sum(r,1)')*(data - xb)*(data - xb)';
-%   m = (1./B)*(B0*m0 + Nk*xb);
-%   W = 
-%   v = 
-  for k = 1:K
-      a(k) = a0 + Nk(k);
-      B(k) = B0 + Nk(k);
-      m(k) = (B0*m0 + Nk*xbk)/B{k};
-      W{k} = inv(inv(W0) + Nk(k)*S{k} + B0*Nk(k)/(B0 + Nk(k))*((xbk - m0)*(xbk - m0)'));
-      v{k} = v0 + Nk(k);
-  end
-
+    
+    
+    %% Variational M-step
+    % XXX: FILL ME IN!
+    for k = 1:K
+        rk = r(:,k)/Nk(k);
+        rk(isnan(rk)) = 0;
+        xb{k} = (rk'*data);
+        S{k} = (rk.*(data - xb{k}))'*(data - xb{k});
+        a(k) = a0 + Nk(k);
+        B(k) = B0 + Nk(k);
+        m{k} = (B0*m0 + Nk(k)*xb{k})/B(k);
+        W{k} = pinv(inv(W0) + Nk(k)*S{k} + B0*Nk(k)/(B0 + Nk(k))*((xb{k} - m0)'*(xb{k} - m0)));
+        v(k) = v0 + Nk(k);
+    end
+    v = v0 + Nk;
+    
 end % for
 
 %% Plot data with distribution (we show expected distribution)
